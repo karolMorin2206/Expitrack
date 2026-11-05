@@ -1,740 +1,185 @@
 <?php
 session_start();
 
-if(!isset($_SESSION['id_usuario'])){
+$conexion_path = __DIR__ . '/../../config/conexion.php';
+if (!file_exists($conexion_path)) {
+    die("Error: No se encontró el archivo de conexión.");
+}
+require_once $conexion_path;
+
+if (!isset($_SESSION['usuario_id'])) {
     header("Location: ../auth/login.php");
     exit();
 }
 
-require_once '../../config/conexion.php';
+$sucursal_id = $_SESSION['id_sucursal'] ?? 1;
 
-/** @var mysqli $conn */
+try {
+    // 1. Total Productos Registrados en Inventario
+    $stmtProductos = $pdo->query("SELECT COUNT(*) FROM productos WHERE estado = 1");
+    $total_productos = $stmtProductos->fetchColumn() ?: 0;
 
-/* TOTAL PRODUCTOS */
-$sqlProductos = "
-SELECT COUNT(*) total
-FROM productos
-WHERE estado = 1
-";
+    // 2. Lotes Próximos a Caducar (en los próximos 30 días con stock > 0)
+    $stmtProximos = $pdo->query("
+        SELECT COUNT(*) 
+        FROM lotes 
+        WHERE estado = 1 
+          AND cantidad > 0 
+          AND fecha_caducidad >= CURDATE() 
+          AND fecha_caducidad <= DATE_ADD(CURDATE(), INTERVAL 30 DAY)
+    ");
+    $proximos_caducar = $stmtProximos->fetchColumn() ?: 0;
 
-$resProductos = mysqli_query($conn,$sqlProductos);
-$totalProductos = mysqli_fetch_assoc($resProductos)['total'];
+    // 3. Lotes Vencidos (con stock > 0)
+    $stmtVencidos = $pdo->query("
+        SELECT COUNT(*) 
+        FROM lotes 
+        WHERE estado = 1 
+          AND cantidad > 0 
+          AND fecha_caducidad < CURDATE()
+    ");
+    $lotes_vencidos = $stmtVencidos->fetchColumn() ?: 0;
 
-/* LOTES EN RIESGO */
-$sqlRiesgo = "
-SELECT COUNT(*) total
-FROM lotes
-WHERE estado = 1
-AND fecha_caducidad BETWEEN CURDATE()
-AND DATE_ADD(CURDATE(), INTERVAL 2 MONTH)
-";
+    // 4. Total de Ventas de Hoy
+    $stmtVentasHoy = $pdo->query("
+        SELECT COALESCE(SUM(total), 0) 
+        FROM ventas 
+        WHERE DATE(fecha) = CURDATE()
+    ");
+    $ventas_hoy = $stmtVentasHoy->fetchColumn() ?: 0;
 
-$resRiesgo = mysqli_query($conn,$sqlRiesgo);
-$totalRiesgo = mysqli_fetch_assoc($resRiesgo)['total'];
-
-/* LOTES VENCIDOS */
-$sqlVencidos = "
-SELECT COUNT(*) total
-FROM lotes
-WHERE estado = 1
-AND fecha_caducidad < CURDATE()
-";
-
-$resVencidos = mysqli_query($conn,$sqlVencidos);
-$totalVencidos = mysqli_fetch_assoc($resVencidos)['total'];
-
-/* VALOR EN RIESGO */
-$sqlValorRiesgo = "
-SELECT SUM(
-    p.precio_venta * l.cantidad
-) valor
-FROM lotes l
-INNER JOIN productos p
-ON l.id_producto = p.id_producto
-WHERE l.fecha_caducidad BETWEEN CURDATE()
-AND DATE_ADD(CURDATE(), INTERVAL 2 MONTH)
-";
-
-$resValorRiesgo = mysqli_query($conn,$sqlValorRiesgo);
-$valorRiesgo = mysqli_fetch_assoc($resValorRiesgo)['valor'];
-
-if(!$valorRiesgo){
-    $valorRiesgo = 0;
+} catch (PDOException $e) {
+    $total_productos = $proximos_caducar = $lotes_vencidos = $ventas_hoy = 0;
 }
-
-/* STOCK BAJO */
-$sqlStockBajo = "
-SELECT COUNT(*) total
-FROM lotes
-WHERE estado = 1
-AND cantidad <= 10
-";
-
-$resStockBajo = mysqli_query($conn,$sqlStockBajo);
-$totalStockBajo = mysqli_fetch_assoc($resStockBajo)['total'];
-
-/* ÚLTIMOS LOTES */
-$sqlUltimos = "
-SELECT
-p.nombre,
-l.numero_lote,
-l.fecha_caducidad
-FROM lotes l
-INNER JOIN productos p
-ON l.id_producto = p.id_producto
-ORDER BY l.id_lote DESC
-LIMIT 5
-";
-
-$ultimos = mysqli_query($conn,$sqlUltimos);
-/* VENTAS HOY */
-$sqlVentasHoy = "
-SELECT COUNT(*) total
-FROM ventas
-WHERE DATE(fecha_venta) = CURDATE()
-";
-
-$resVentasHoy = mysqli_query($conn,$sqlVentasHoy);
-$ventasHoy = mysqli_fetch_assoc($resVentasHoy)['total'];
-
-/* VENTAS MES */
-$sqlVentasMes = "
-SELECT COUNT(*) total
-FROM ventas
-WHERE MONTH(fecha_venta)=MONTH(CURDATE())
-AND YEAR(fecha_venta)=YEAR(CURDATE())
-";
-
-$resVentasMes = mysqli_query($conn,$sqlVentasMes);
-$ventasMes = mysqli_fetch_assoc($resVentasMes)['total'];
-
-/* INGRESOS MES */
-$sqlIngresosMes = "
-SELECT SUM(total) ingresos
-FROM ventas
-WHERE MONTH(fecha_venta)=MONTH(CURDATE())
-AND YEAR(fecha_venta)=YEAR(CURDATE())
-";
-
-$resIngresosMes = mysqli_query($conn,$sqlIngresosMes);
-$ingresosMes = mysqli_fetch_assoc($resIngresosMes)['ingresos'];
-
-if(!$ingresosMes){
-    $ingresosMes = 0;
-}
-
-/* VENTAS POR MES */
-$sqlGrafica = "
-SELECT
-MONTH(fecha_venta) mes,
-SUM(total) total
-FROM ventas
-GROUP BY MONTH(fecha_venta)
-ORDER BY MONTH(fecha_venta)
-";
-
-$resGrafica = mysqli_query($conn,$sqlGrafica);
-
-$meses = [];
-$totales = [];
-
-while($fila = mysqli_fetch_assoc($resGrafica)){
-    $meses[] = $fila['mes'];
-    $totales[] = $fila['total'];
-}
-
 ?>
-
 <!DOCTYPE html>
-<html lang="es">
-
+<html lang="es" class="h-full bg-slate-950">
 <head>
-
-<meta charset="UTF-8">
-
-<title>Dashboard - ExpiTrack</title>
-
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
-<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-<style>
-body{
-    background:linear-gradient(180deg,#f8fafc,#eef2f7);
-}
-
-.content{
-    margin-left:280px;
-}
-
-.sidebar{
-    width:280px;
-    min-height:100vh;
-    position:fixed;
-    left:0;
-    top:0;
-    z-index:1000;
-
-    background:linear-gradient(
-        180deg,
-        #0f172a 0%,
-        #111827 50%,
-        #1e293b 100%
-    );
-
-    box-shadow:8px 0 25px rgba(0,0,0,.20);
-    padding:20px;
-}
-
-.logo-box{
-    padding: 15px 20px 5px;
-    text-align: center;
-}
-
-.logo-box h2{
-    color:#fff;
-    font-weight:700;
-    margin:0;
-    font-size:2rem;
-}
-
-.logo-box span{
-    color:#94a3b8;
-    font-size:11px;
-    letter-spacing:2px;
-    text-transform:uppercase;
-}
-
-.sidebar-divider{
-    height:1px;
-    background:rgba(255,255,255,.12);
-    margin:20px 0;
-}
-
-.sidebar-title{
-    color:#64748b;
-    font-size:11px;
-    letter-spacing:2px;
-    font-weight:700;
-    margin-bottom:15px;
-    padding-left:12px;
-}
-
-.sidebar .nav-link{
-    display:flex;
-    align-items:center;
-    gap:12px;
-
-    color:#cbd5e1 !important;
-    padding:13px 15px;
-    border-radius:14px;
-    margin-bottom:8px;
-
-    transition:.3s;
-    font-size:16px;
-}
-
-.sidebar .nav-link i{
-    font-size:18px;
-    background: transparent;
-}
-
-.sidebar .nav-link:hover{
-    background:rgba(255,255,255,.08);
-    transform:translateX(6px);
-    color:white !important;
-}
-
-.sidebar .nav-link.active{
-    background:linear-gradient(
-        90deg,
-        #2563eb,
-        #3b82f6
-    );
-
-    color:white !important;
-    font-weight:600;
-
-    box-shadow:0 6px 18px rgba(37,99,235,.35);
-}
-
-.logout-container{
-    position: sticky;
-    bottom: 0;
-    padding: 15px;
-    z-index: 100;
-    color:white !important;
-}
-
-.sidebar .btn-danger{
-    border:none;
-    border-radius:14px;
-    padding:12px;
-
-    font-weight:600;
-
-    background:linear-gradient(
-        135deg,
-        #ef4444,
-        #dc2626
-    );
-
-    transition:.3s;
-}
-
-.sidebar .btn-danger:hover{
-    transform:translateY(-2px);
-}
-
-.user-panel{
-    display:flex;
-    align-items:center;
-    gap:12px;
-    margin:20px 0;
-    padding:12px;
-    color:#ffffff;
-    border-radius:12px;
-    margin: 5px 15px 12px;
-}
-
-.avatar{
-    width:45px;
-    height:45px;
-    border-radius:50%;
-    background:#2563eb;
-    color:white;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    font-weight:bold;
-}
-
-.user-panel small{
-    display:block;
-    color:#9ca3af;
-}
-
-.sidebar{
-    width:280px;
-    height:100vh;
-    position:fixed;
-    left:0;
-    top:0;
-
-    display:flex;
-    flex-direction:column;
-}
-
-.sidebar-menu{
-    flex:1;
-    overflow-y:auto;
-    overflow-x:hidden;
-    padding-right:5px;
-
-    /* espacio para el botón cerrar sesión */
-    padding-bottom:90px;
-}
-
-/* Scroll moderno */
-.sidebar-menu::-webkit-scrollbar{
-    width:6px;
-}
-
-.sidebar-menu::-webkit-scrollbar-track{
-    background:transparent;
-}
-
-.sidebar-menu::-webkit-scrollbar-thumb{
-    background:#3b82f6;
-    border-radius:20px;
-}
-
-.sidebar-menu::-webkit-scrollbar-thumb:hover{
-    background:#60a5fa;
-}
-
-.logout-container{
-    padding:15px;
-    margin-top:auto;
-}
-
-.card{
-    border:none;
-    border-radius:18px;
-    box-shadow:0 4px 20px rgba(0,0,0,.08);
-    transition:.3s;
-}
-
-.card:hover{
-    transform:translateY(-4px);
-}
-
-.dashboard-card{
-    overflow:hidden;
-    position:relative;
-}
-.card-link{
-    text-decoration:none;
-    color:inherit;
-    display:block;
-}
-
-.card-link:hover{
-    color:inherit;
-}
-
-.alert-link{
-    text-decoration:none;
-    color:inherit;
-    display:block;
-}
-
-.alert-link:hover{
-    color:inherit;
-}
-
-.dashboard-card{
-    cursor:pointer;
-}
-
-.alert{
-    cursor:pointer;
-    transition:.3s;
-}
-
-.alert:hover{
-    transform:translateX(5px);
-}
-
-.dashboard-card::before{
-    content:'';
-    position:absolute;
-    top:0;
-    left:0;
-    width:100%;
-    height:5px;
-}
-
-.border-blue::before{
-    background:#2563eb;
-}
-
-.border-yellow::before{
-    background:#f59e0b;
-}
-
-.border-red::before{
-    background:#ef4444;
-}
-
-.border-green::before{
-    background:#16a34a;
-}
-
-.border-cyan::before{
-    background:#06b6d4;
-}
-
-.card-body{
-    padding:22px;
-}
-
-.dashboard-card h6{
-    font-size:15px;
-    font-weight:600;
-}
-
-.dashboard-card h2{
-    font-size:2rem;
-    font-weight:700;
-}
-
-.alert{
-    border:none;
-    border-radius:14px;
-}
-
-.table{
-    margin-top:15px;
-}
-
-.table thead{
-    background:#111827;
-    color:white;
-}
-
-.table td,
-.table th{
-    padding:14px;
-    vertical-align:middle;
-}
-
-.table tbody tr:hover{
-    background:#f3f4f6;
-}
-
-.welcome-card{
-    padding:15px;
-}
-
-.welcome-title{
-    font-size:2.2rem;
-    font-weight:700;
-}
-
-.welcome-text{
-    color:#6b7280;
-    font-size:1.1rem;
-}
-</style>
-
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ExpiTrack | Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
+<body class="h-full bg-slate-950 text-slate-100 flex overflow-hidden font-sans">
 
-<body>
+    <?php include_once __DIR__ . '/../layouts/sidebar.php'; ?>
 
-<div class="d-flex">
+    <div class="flex-1 flex flex-col min-w-0 overflow-y-auto">
+        <?php include_once __DIR__ . '/../layouts/navbar.php'; ?>
 
-<?php include '../layouts/sidebar.php'; ?>
-
-<div class="content w-100">
-
-<?php include '../layouts/navbar.php'; ?>
-
-<div class="container-fluid p-4">
-
-
-<!-- KPIs -->
-<div class="row g-4">
-
-    <div class="col-xl-3 col-md-6">
-
-        <a href="../productos/index.php" class="card-link">
-
-            <div class="card dashboard-card border-blue">
-                <div class="card-body">
-                    <h6>📦 Productos</h6>
-                    <h2><?= $totalProductos ?></h2>
+        <main class="flex-1 p-6 lg:p-8 space-y-8 max-w-7xl mx-auto w-full">
+            
+            <!-- Banner de Bienvenida -->
+            <div class="p-6 lg:p-8 rounded-3xl bg-slate-900 border border-slate-800 shadow-xl relative overflow-hidden">
+                <div class="relative z-10 max-w-2xl">
+                    <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 mb-3">
+                        <i class="fa-solid fa-chart-line text-[10px]"></i> Panel de Control
+                    </span>
+                    <h1 class="text-3xl font-extrabold text-white tracking-tight">
+                        Hola, <?php echo htmlspecialchars($_SESSION['usuario_nombre'] ?? 'Administrador'); ?> 👋
+                    </h1>
+                    <p class="text-sm text-slate-400 mt-2 leading-relaxed">
+                        Bienvenido a <strong class="text-white">ExpiTrack</strong>. Aquí tienes el resumen ejecutivo del estado de inventario, ventas y alertas de caducidades en tiempo real.
+                    </p>
                 </div>
             </div>
 
-        </a>
+            <!-- TARJETAS INTERACTIVAS DE RESUMEN (ENLACES) -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+                
+                <!-- 1. PRODUCTOS REGISTRADOS -> Inventario General -->
+                <a href="../inventario/index.php" 
+                   class="p-5 rounded-2xl bg-slate-900 border border-slate-800 hover:border-emerald-500/50 hover:bg-slate-800/80 shadow-xl transition-all duration-200 group flex items-center justify-between">
+                    <div>
+                        <span class="text-xs font-semibold text-slate-400 group-hover:text-emerald-400 uppercase tracking-wider block transition-colors">Productos Registrados</span>
+                        <span class="text-3xl font-extrabold text-white mt-1 block"><?php echo number_format($total_productos); ?></span>
+                        <span class="text-[11px] text-slate-500 mt-1 block font-medium">Catálogo activo</span>
+                    </div>
+                    <div class="w-12 h-12 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center text-xl border border-emerald-500/20 group-hover:scale-110 transition-transform">
+                        <i class="fa-solid fa-boxes-stacked"></i>
+                    </div>
+                </a>
 
-    </div>
+                <!-- 2. PRÓXIMOS A CADUCAR -> Control de Lotes -->
+                <a href="../lotes/index.php" 
+                   class="p-5 rounded-2xl bg-slate-900 border border-slate-800 hover:border-amber-500/50 hover:bg-slate-800/80 shadow-xl transition-all duration-200 group flex items-center justify-between">
+                    <div>
+                        <span class="text-xs font-semibold text-amber-400 uppercase tracking-wider block">Próximos a Caducar</span>
+                        <span class="text-3xl font-extrabold text-amber-300 mt-1 block"><?php echo number_format($proximos_caducar); ?></span>
+                        <span class="text-[11px] text-slate-500 mt-1 block font-medium">En los próximos 30 días</span>
+                    </div>
+                    <div class="w-12 h-12 rounded-xl bg-amber-500/10 text-amber-400 flex items-center justify-center text-xl border border-amber-500/20 group-hover:scale-110 transition-transform">
+                        <i class="fa-solid fa-triangle-exclamation"></i>
+                    </div>
+                </a>
 
-    <div class="col-xl-3 col-md-6">
+                <!-- 3. LOTES VENCIDOS -> Caducidades / Alertas -->
+                <a href="../alertas/index.php" 
+                   class="p-5 rounded-2xl bg-slate-900 border border-slate-800 hover:border-rose-500/50 hover:bg-slate-800/80 shadow-xl transition-all duration-200 group flex items-center justify-between">
+                    <div>
+                        <span class="text-xs font-semibold text-rose-400 uppercase tracking-wider block">Lotes Vencidos</span>
+                        <span class="text-3xl font-extrabold text-rose-300 mt-1 block"><?php echo number_format($lotes_vencidos); ?></span>
+                        <span class="text-[11px] text-slate-500 mt-1 block font-medium">Requieren retiro de inventario</span>
+                    </div>
+                    <div class="w-12 h-12 rounded-xl bg-rose-500/10 text-rose-400 flex items-center justify-center text-xl border border-rose-500/20 group-hover:scale-110 transition-transform">
+                        <i class="fa-solid fa-skull-crossbones"></i>
+                    </div>
+                </a>
 
-        <a href="../caducidades/index.php" class="card-link">
+                <!-- 4. VENTAS DE HOY -> Historial de Ventas -->
+                <a href="../ventas/historial.php" 
+                   class="p-5 rounded-2xl bg-slate-900 border border-slate-800 hover:border-teal-500/50 hover:bg-slate-800/80 shadow-xl transition-all duration-200 group flex items-center justify-between">
+                    <div>
+                        <span class="text-xs font-semibold text-teal-400 uppercase tracking-wider block">Ventas de Hoy</span>
+                        <span class="text-3xl font-extrabold text-teal-300 font-mono mt-1 block">$<?php echo number_format($ventas_hoy, 2); ?></span>
+                        <span class="text-[11px] text-slate-500 mt-1 block font-medium">Ingresos acumulados</span>
+                    </div>
+                    <div class="w-12 h-12 rounded-xl bg-teal-500/10 text-teal-400 flex items-center justify-center text-xl border border-teal-500/20 group-hover:scale-110 transition-transform">
+                        <i class="fa-solid fa-sack-dollar"></i>
+                    </div>
+                </a>
 
-            <div class="card dashboard-card border-yellow">
-                <div class="card-body">
-                    <h6 class="text-warning">⚠️ En Riesgo</h6>
-                    <h2><?= $totalRiesgo ?></h2>
+            </div>
+
+            <!-- Acciones Rápidas -->
+            <div class="space-y-4">
+                <h2 class="text-base font-bold text-white flex items-center gap-2">
+                    <i class="fa-solid fa-bolt text-amber-400"></i> Acciones Rápidas
+                </h2>
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+                    
+                    <a href="../punto_venta/index.php" class="p-6 rounded-2xl bg-slate-900 border border-slate-800 hover:border-emerald-500/50 hover:bg-slate-800/80 transition-all duration-200 group shadow-lg">
+                        <div class="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center text-lg mb-4 border border-emerald-500/20 group-hover:scale-110 transition-transform">
+                            <i class="fa-solid fa-cash-register"></i>
+                        </div>
+                        <h3 class="font-bold text-white text-base group-hover:text-emerald-300 transition-colors">Abrir Punto de Venta</h3>
+                        <p class="text-xs text-slate-400 mt-1 leading-relaxed">Registra cobros rápidos, aplica descuentos y genera tickets de compra.</p>
+                    </a>
+
+                    <a href="../lotes/crear.php" class="p-6 rounded-2xl bg-slate-900 border border-slate-800 hover:border-emerald-500/50 hover:bg-slate-800/80 transition-all duration-200 group shadow-lg">
+                        <div class="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-400 flex items-center justify-center text-lg mb-4 border border-amber-500/20 group-hover:scale-110 transition-transform">
+                            <i class="fa-solid fa-plus"></i>
+                        </div>
+                        <h3 class="font-bold text-white text-base group-hover:text-amber-300 transition-colors">Registrar Nuevo Lote</h3>
+                        <p class="text-xs text-slate-400 mt-1 leading-relaxed">Ingresa productos con su número de lote y fecha de vencimiento.</p>
+                    </a>
+
+                    <a href="../alertas/index.php" class="p-6 rounded-2xl bg-slate-900 border border-slate-800 hover:border-emerald-500/50 hover:bg-slate-800/80 transition-all duration-200 group shadow-lg">
+                        <div class="w-10 h-10 rounded-xl bg-rose-500/10 text-rose-400 flex items-center justify-center text-lg mb-4 border border-rose-500/20 group-hover:scale-110 transition-transform">
+                            <i class="fa-solid fa-bell"></i>
+                        </div>
+                        <h3 class="font-bold text-white text-base group-hover:text-rose-300 transition-colors">Revisar Alertas</h3>
+                        <p class="text-xs text-slate-400 mt-1 leading-relaxed">Consulta los productos próximos a caducar para aplicar ofertas.</p>
+                    </a>
+
                 </div>
             </div>
 
-        </a>
-
+        </main>
     </div>
 
-    <div class="col-xl-3 col-md-6">
-
-        <a href="../lotes/index.php?estado=vencidos" class="card-link">
-
-            <div class="card dashboard-card border-red">
-                <div class="card-body">
-                    <h6 class="text-danger">❌ Vencidos</h6>
-                    <h2><?= $totalVencidos ?></h2>
-                </div>
-            </div>
-
-        </a>
-
-    </div>
-
-    <div class="col-xl-3 col-md-6">
-        <div class="card dashboard-card border-green">
-            <div class="card-body">
-                <h6 class="text-success">💰 Valor Riesgo</h6>
-                <h2>$<?= number_format($valorRiesgo,2) ?></h2>
-            </div>
-        </div>
-    </div>
-
-    <div class="col-xl-3 col-md-6">
-
-        <a href="../lotes/index.php?stock=bajo" class="card-link">
-
-            <div class="card dashboard-card border-cyan">
-                <div class="card-body">
-                    <h6 class="text-info">📉 Stock Bajo</h6>
-                    <h2><?= $totalStockBajo ?></h2>
-                </div>
-            </div>
-
-        </a>
-
-    </div>
-
-    <div class="col-xl-3 col-md-6">
-        <div class="card dashboard-card shadow border-0 bg-primary text-white">
-            <div class="card-body">
-                <h6 class="text-white">🛒 Ventas Hoy</h6>
-                <h2><?= $ventasHoy ?></h2>
-            </div>
-        </div>
-    </div>
-
-    <div class="col-xl-3 col-md-6">
-        <div class="card dashboard-card shadow border-0 bg-success text-white">
-            <div class="card-body">
-                <h6 class="text-white">📈 Ventas del Mes</h6>
-                <h2><?= $ventasMes ?></h2>
-            </div>
-        </div>
-    </div>
-
-    <div class="col-xl-3 col-md-6">
-        <div class="card dashboard-card shadow border-0 bg-warning">
-            <div class="card-body">
-                <h6>💵 Ingresos del Mes</h6>
-                <h2>$<?= number_format($ingresosMes,2) ?></h2>
-            </div>
-        </div>
-    </div>
-
-</div>
-
-<!-- Bienvenida -->
-<div class="card welcome-card border-0 mt-4">
-    <div class="card-body">
-
-        <h2 class="welcome-title">
-            👋 Bienvenido a ExpiTrack
-        </h2>
-
-        <p class="welcome-text mb-0">
-            Sistema inteligente para la gestión de inventarios y control de caducidades.
-        </p>
-
-    </div>
-</div>
-
-<!-- Alertas -->
-<div class="mt-4">
-
-    <a href="../lotes/index.php?estado=vencidos"
-    class="alert-link">
-
-        <div class="alert alert-danger shadow-sm">
-            <strong>❌ Atención:</strong>
-            Existen <?= $totalVencidos ?> lotes vencidos.
-        </div>
-
-    </a>
-
-    <a href="../lotes/index.php?estado=riesgo"
-    class="alert-link">
-
-        <div class="alert alert-warning shadow-sm">
-            <strong>⚠️ Advertencia:</strong>
-            Existen <?= $totalRiesgo ?> lotes próximos a caducar.
-        </div>
-
-    </a>
-
-    <a href="../lotes/index.php?stock=bajo"
-    class="alert-link">
-
-        <div class="alert alert-info shadow-sm">
-            <strong>📉 Inventario Bajo:</strong>
-            Existen <?= $totalStockBajo ?> lotes con pocas existencias.
-        </div>
-
-    </a>
-
-</div>
-
-<!-- Gráfica -->
-<div class="card shadow border-0 mt-4">
-    <div class="card-body">
-
-        <h4 class="mb-4">📊 Ventas por Mes</h4>
-
-        <div style="height:350px">
-            <canvas id="graficaVentas"></canvas>
-        </div>
-
-    </div>
-</div>
-
-<!-- Últimos lotes -->
-<div class="card shadow border-0 mt-4">
-    <div class="card-body">
-
-        <h4 class="mb-4">📦 Últimos Lotes Registrados</h4>
-
-        <table class="table table-hover align-middle">
-
-            <thead class="table-dark">
-                <tr>
-                    <th>Producto</th>
-                    <th>Lote</th>
-                    <th>Caducidad</th>
-                </tr>
-            </thead>
-
-            <tbody>
-
-                <?php while($lote=mysqli_fetch_assoc($ultimos)){ ?>
-
-                <tr>
-                    <td><?= $lote['nombre'] ?></td>
-                    <td><?= $lote['numero_lote'] ?></td>
-                    <td><?= $lote['fecha_caducidad'] ?></td>
-                </tr>
-
-                <?php } ?>
-
-            </tbody>
-
-        </table>
-
-    </div>
-</div>
-
-</div>
-</div>
-</div>
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
-<script>
-
-const ctx = document.getElementById('graficaVentas');
-
-new Chart(ctx,{
-    type:'line',
-    data:{
-        labels: <?= json_encode($meses); ?>,
-        datasets:[{
-            label:'Ingresos',
-            data: <?= json_encode($totales); ?>,
-            fill:true,
-            tension:.4,
-            borderWidth:3,
-            backgroundColor:'rgba(37,99,235,.15)',
-            borderColor:'#2563eb'
-        }]
-    },
-    options:{
-        responsive:true,
-        maintainAspectRatio:false,
-        plugins:{
-            legend:{
-                display:false
-            }
-        }
-    }
-});
-
-</script>
 </body>
-
 </html>

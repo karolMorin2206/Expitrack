@@ -1,627 +1,247 @@
 <?php
 session_start();
-
-if(isset($_SESSION['id_usuario'])){
-    header("Location: ../dashboard/index.php");
-    exit();
-}
+$error = isset($_GET['error']) ? $_GET['error'] : null;
 ?>
-
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es" class="h-full bg-slate-950">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-<title>ExpiTrack | Login</title>
-
-<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-
-<style>
-*{
-    margin:0;
-    padding:0;
-    box-sizing:border-box;
-}
-
-html, body{
-    width:100%;
-    height:100%;
-    overflow:hidden;
-}
-
-body{
-    font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    background:
-        radial-gradient(circle at top left, rgba(34,197,94,.18), transparent 32%),
-        radial-gradient(circle at bottom right, rgba(14,165,233,.22), transparent 35%),
-        linear-gradient(135deg,#eef6f4,#f8fafc);
-}
-
-/* CONTENEDOR GENERAL */
-
-.auth-shell{
-    width:100%;
-    height:100vh;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    padding:24px;
-}
-
-/* TARJETA CENTRAL */
-
-.auth-card{
-    width:min(1120px, 100%);
-    height:min(680px, calc(100vh - 48px));
-    background:#ffffff;
-    border-radius:34px;
-    display:grid;
-    grid-template-columns:.95fr 1.05fr;
-    overflow:hidden;
-    box-shadow:0 30px 90px rgba(15,23,42,.18);
-}
-
-/* PANEL IZQUIERDO */
-
-.brand-panel{
-    position:relative;
-    background:
-        linear-gradient(145deg, rgba(4,20,35,.96), rgba(7,44,64,.96)),
-        radial-gradient(circle at 20% 20%, rgba(34,197,94,.25), transparent 35%),
-        radial-gradient(circle at 80% 80%, rgba(14,165,233,.25), transparent 35%);
-    color:white;
-    padding:44px;
-    display:flex;
-    flex-direction:column;
-    justify-content:space-between;
-    overflow:hidden;
-}
-
-.brand-panel::before{
-    content:"";
-    position:absolute;
-    width:280px;
-    height:280px;
-    border-radius:50%;
-    background:rgba(34,197,94,.16);
-    top:-90px;
-    right:-90px;
-}
-
-.brand-panel::after{
-    content:"";
-    position:absolute;
-    width:230px;
-    height:230px;
-    border-radius:50%;
-    background:rgba(14,165,233,.14);
-    bottom:-80px;
-    left:-70px;
-}
-
-.brand-top,
-.brand-bottom{
-    position:relative;
-    z-index:2;
-}
-
-.logo-frame{
-    width:120px;
-    height:120px;
-    border-radius:26px;
-    background:rgba(255,255,255,.10);
-    border:1px solid rgba(255,255,255,.16);
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    margin-bottom:24px;
-}
-
-.logo-frame img{
-    width:95px;
-    height:95px;
-    object-fit:contain;
-}
-
-.brand-panel h1{
-    font-size:3.6rem;
-    font-weight:900;
-    letter-spacing:-2px;
-    margin-bottom:12px;
-}
-
-.brand-panel p{
-    color:#cbd5e1;
-    font-size:1.05rem;
-    line-height:1.6;
-    max-width:380px;
-}
-
-.brand-stats{
-    display:grid;
-    grid-template-columns:1fr 1fr;
-    gap:14px;
-    margin-top:28px;
-}
-
-.stat-box{
-    background:rgba(255,255,255,.08);
-    border:1px solid rgba(255,255,255,.12);
-    border-radius:18px;
-    padding:16px;
-    backdrop-filter:blur(10px);
-}
-
-.stat-box i{
-    color:#4ade80;
-    font-size:1.2rem;
-    margin-bottom:10px;
-}
-
-.stat-box strong{
-    display:block;
-    font-size:.95rem;
-    margin-bottom:3px;
-}
-
-.stat-box span{
-    color:#cbd5e1;
-    font-size:.78rem;
-}
-
-.brand-bottom{
-    font-size:.85rem;
-    color:#94a3b8;
-}
-
-/* PANEL DERECHO */
-
-.login-panel{
-    background:#ffffff;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    padding:44px;
-}
-
-.login-box{
-    width:100%;
-    max-width:420px;
-}
-
-.mobile-logo{
-    display:none;
-    text-align:center;
-    margin-bottom:16px;
-}
-
-.mobile-logo img{
-    width:76px;
-    height:76px;
-    object-fit:contain;
-}
-
-.login-label{
-    display:inline-flex;
-    align-items:center;
-    gap:8px;
-    padding:8px 14px;
-    border-radius:999px;
-    background:#ecfdf5;
-    color:#047857;
-    font-weight:800;
-    font-size:.83rem;
-    margin-bottom:18px;
-}
-
-.login-box h2{
-    font-size:2.25rem;
-    font-weight:900;
-    color:#0f172a;
-    margin-bottom:8px;
-}
-
-.login-box .subtitle{
-    color:#64748b;
-    margin-bottom:24px;
-    font-size:.98rem;
-}
-
-/* ALERTAS */
-
-.alert{
-    border:none;
-    border-radius:16px;
-    padding:13px 15px;
-    font-weight:700;
-    font-size:.92rem;
-}
-
-/* FORMULARIO */
-
-.form-block{
-    margin-bottom:18px;
-}
-
-.form-block label{
-    display:block;
-    color:#334155;
-    font-weight:800;
-    margin-bottom:8px;
-    font-size:.92rem;
-}
-
-.input-line{
-    height:56px;
-    border:1px solid #dbe4ef;
-    border-radius:18px;
-    background:#f8fafc;
-    display:flex;
-    align-items:center;
-    padding:0 15px;
-    transition:.22s ease;
-}
-
-.input-line:focus-within{
-    background:white;
-    border-color:#0ea5e9;
-    box-shadow:0 0 0 4px rgba(14,165,233,.12);
-}
-
-.input-line i{
-    color:#64748b;
-    margin-right:11px;
-}
-
-.input-line input{
-    width:100%;
-    border:none;
-    outline:none;
-    background:transparent;
-    color:#0f172a;
-    font-size:1rem;
-}
-
-.input-line input::placeholder{
-    color:#94a3b8;
-}
-
-.eye-btn{
-    border:none;
-    background:transparent;
-    color:#64748b;
-    padding:0;
-}
-
-/* OPCIONES */
-
-.login-options{
-    display:flex;
-    justify-content:space-between;
-    align-items:center;
-    margin:6px 0 22px;
-    gap:10px;
-}
-
-.remember{
-    display:flex;
-    align-items:center;
-    gap:7px;
-    color:#475569;
-    font-weight:600;
-    font-size:.9rem;
-}
-
-.remember input{
-    accent-color:#0ea5e9;
-}
-
-.login-options a{
-    color:#0284c7;
-    text-decoration:none;
-    font-weight:800;
-    font-size:.9rem;
-}
-
-.login-options a:hover{
-    text-decoration:underline;
-}
-
-/* BOTÓN */
-
-.login-btn{
-    width:100%;
-    height:58px;
-    border:none;
-    border-radius:18px;
-    background:linear-gradient(135deg,#16a34a,#0284c7);
-    color:white;
-    font-weight:900;
-    font-size:1.04rem;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    gap:10px;
-    box-shadow:0 16px 32px rgba(2,132,199,.24);
-    transition:.22s ease;
-}
-
-.login-btn:hover{
-    transform:translateY(-2px);
-    box-shadow:0 20px 38px rgba(2,132,199,.30);
-}
-
-/* INFO */
-
-.quick-info{
-    margin-top:22px;
-    padding:14px;
-    border-radius:18px;
-    background:#f8fafc;
-    border:1px solid #e2e8f0;
-    text-align:center;
-}
-
-.quick-info small{
-    display:block;
-    color:#64748b;
-    margin-bottom:4px;
-    font-weight:700;
-}
-
-.quick-info strong{
-    color:#0f172a;
-    font-size:.92rem;
-}
-
-.footer{
-    text-align:center;
-    margin-top:18px;
-    color:#94a3b8;
-    font-size:.82rem;
-    font-weight:600;
-}
-
-/* RESPONSIVE SIN SCROLL */
-
-@media(max-width:992px){
-
-    .auth-shell{
-        padding:18px;
-    }
-
-    .auth-card{
-        grid-template-columns:1fr;
-        height:calc(100vh - 36px);
-        max-width:480px;
-    }
-
-    .brand-panel{
-        display:none;
-    }
-
-    .login-panel{
-        padding:28px;
-    }
-
-    .mobile-logo{
-        display:block;
-    }
-
-    .login-box h2{
-        font-size:2rem;
-        text-align:center;
-    }
-
-    .login-box .subtitle{
-        text-align:center;
-    }
-
-    .login-label{
-        display:flex;
-        width:max-content;
-        margin:0 auto 16px;
-    }
-
-    .login-options{
-        flex-direction:column;
-        align-items:flex-start;
-    }
-}
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ExpiTrack | Iniciar Sesión</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome CDN para Iconos -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts Inter & Plus Jakarta Sans -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Plus Jakarta Sans', 'sans-serif'],
+                    },
+                    colors: {
+                        brand: {
+                            50: '#ecfdf5',
+                            100: '#d1fae5',
+                            500: '#10b981',
+                            600: '#059669',
+                            700: '#047857',
+                            900: '#064e3b',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        .bg-mesh {
+            background-color: #0f172a;
+            background-image: 
+                radial-gradient(at 0% 0%, rgba(16, 185, 129, 0.15) 0px, transparent 50%),
+                radial-gradient(at 100% 100%, rgba(14, 165, 233, 0.15) 0px, transparent 50%),
+                radial-gradient(at 50% 50%, rgba(15, 23, 42, 0.8) 0px, transparent 100%);
+        }
+    </style>
 </head>
+<body class="h-full bg-mesh flex items-center justify-center p-4 sm:p-6 lg:p-8 font-sans antialiased text-slate-200">
 
-<body>
+    <!-- Card Principal -->
+    <div class="w-full max-w-5xl bg-slate-900/80 backdrop-blur-xl border border-slate-800/80 rounded-3xl shadow-2xl shadow-emerald-950/20 overflow-hidden grid grid-cols-1 lg:grid-cols-12 min-h-[620px]">
+        
+        <!-- Panel Izquierdo (Branding & Features) -->
+        <div class="lg:col-span-5 bg-gradient-to-br from-slate-900 via-emerald-950/40 to-slate-900 p-8 lg:p-10 flex flex-col justify-between relative overflow-hidden border-b lg:border-b-0 lg:border-r border-slate-800/80">
+            <!-- Circulo decorativo de fondo -->
+            <div class="absolute -top-20 -left-20 w-60 h-60 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none"></div>
+            <div class="absolute -bottom-20 -right-20 w-60 h-60 bg-teal-500/10 rounded-full blur-3xl pointer-events-none"></div>
 
-<div class="auth-shell">
-
-    <div class="auth-card">
-
-        <!-- PANEL IZQUIERDO -->
-        <div class="brand-panel">
-
-            <div class="brand-top">
-
-                <div class="logo-frame">
-                    <img src="../../assets/img/logo.png" alt="Logo ExpiTrack">
+            <div class="relative z-10">
+                <!-- Logo & Marca -->
+                <div class="flex items-center gap-3 mb-8">
+                    <div class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-400 p-0.5 shadow-lg shadow-emerald-500/30 flex items-center justify-center">
+                        <div class="w-full h-full bg-slate-950 rounded-[14px] flex items-center justify-center">
+                            <i class="fa-solid fa-boxes-packing text-emerald-400 text-xl"></i>
+                        </div>
+                    </div>
+                    <div>
+                        <h1 class="text-2xl font-bold tracking-tight text-white flex items-center gap-1">
+                            Expi<span class="text-emerald-400">Track</span>
+                        </h1>
+                        <p class="text-xs text-slate-400 font-medium">Control Inteligente</p>
+                    </div>
                 </div>
 
-                <h1>ExpiTrack</h1>
-
-                <p>
-                    Sistema para controlar inventario, caducidades, descuentos y ventas de forma inteligente.
-                </p>
-
-                <div class="brand-stats">
-
-                    <div class="stat-box">
-                        <i class="fa-solid fa-boxes-stacked"></i>
-                        <strong>Inventario</strong>
-                        <span>Control por lote</span>
-                    </div>
-
-                    <div class="stat-box">
-                        <i class="fa-solid fa-bell"></i>
-                        <strong>Alertas</strong>
-                        <span>Caducidades</span>
-                    </div>
-
-                    <div class="stat-box">
-                        <i class="fa-solid fa-tags"></i>
-                        <strong>Descuentos</strong>
-                        <span>Automáticos</span>
-                    </div>
-
-                    <div class="stat-box">
-                        <i class="fa-solid fa-cash-register"></i>
-                        <strong>Ventas</strong>
-                        <span>Punto de venta</span>
-                    </div>
-
+                <!-- Titulo & Descripción -->
+                <div class="space-y-3 mb-8">
+                    <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> Sistema Multimodular
+                    </span>
+                    <h2 class="text-2xl font-bold text-white leading-snug">
+                        Gestión integral de productos y vencimientos
+                    </h2>
+                    <p class="text-sm text-slate-400 leading-relaxed">
+                        Controla tu inventario por lote, proyecta alertas de caducidad y optimiza tus ventas en tiempo real.
+                    </p>
                 </div>
 
+                <!-- Grid de Módulos Destacados -->
+                <div class="grid grid-cols-2 gap-3">
+                    <div class="p-3.5 rounded-2xl bg-slate-800/40 border border-slate-700/50 hover:border-emerald-500/40 transition-all duration-300 group">
+                        <div class="w-8 h-8 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
+                            <i class="fa-solid fa-boxes-stacked text-sm"></i>
+                        </div>
+                        <p class="text-xs font-semibold text-slate-200">Inventario</p>
+                        <p class="text-[11px] text-slate-400">Control por lotes</p>
+                    </div>
+
+                    <div class="p-3.5 rounded-2xl bg-slate-800/40 border border-slate-700/50 hover:border-emerald-500/40 transition-all duration-300 group">
+                        <div class="w-8 h-8 rounded-xl bg-amber-500/10 text-amber-400 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
+                            <i class="fa-solid fa-bell text-sm"></i>
+                        </div>
+                        <p class="text-xs font-semibold text-slate-200">Alertas</p>
+                        <p class="text-[11px] text-slate-400">Próximos a vencer</p>
+                    </div>
+
+                    <div class="p-3.5 rounded-2xl bg-slate-800/40 border border-slate-700/50 hover:border-emerald-500/40 transition-all duration-300 group">
+                        <div class="w-8 h-8 rounded-xl bg-teal-500/10 text-teal-400 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
+                            <i class="fa-solid fa-tags text-sm"></i>
+                        </div>
+                        <p class="text-xs font-semibold text-slate-200">Descuentos</p>
+                        <p class="text-[11px] text-slate-400">Reglas automáticas</p>
+                    </div>
+
+                    <div class="p-3.5 rounded-2xl bg-slate-800/40 border border-slate-700/50 hover:border-emerald-500/40 transition-all duration-300 group">
+                        <div class="w-8 h-8 rounded-xl bg-cyan-500/10 text-cyan-400 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
+                            <i class="fa-solid fa-cash-register text-sm"></i>
+                        </div>
+                        <p class="text-xs font-semibold text-slate-200">Ventas</p>
+                        <p class="text-[11px] text-slate-400">Punto de venta y ticket</p>
+                    </div>
+                </div>
             </div>
 
-            <div class="brand-bottom">
-                Control inteligente, menos pérdidas, más ganancias.
+            <!-- Footer del panel izquierdo -->
+            <div class="relative z-10 pt-6 mt-6 border-t border-slate-800/60 flex items-center justify-between text-xs text-slate-500">
+                <span>Plataforma Académica</span>
+                <span>v1.0.0</span>
             </div>
-
         </div>
 
-        <!-- PANEL DERECHO -->
-        <div class="login-panel">
-
-            <div class="login-box">
-
-                <div class="mobile-logo">
-                    <img src="../../assets/img/logo.png" alt="Logo ExpiTrack">
+        <!-- Panel Derecho (Formulario de Autenticación) -->
+        <div class="lg:col-span-7 p-8 lg:p-12 flex flex-col justify-between bg-slate-900/60">
+            <div>
+                <!-- Encabezado del Formulario -->
+                <div class="flex items-center justify-between mb-8">
+                    <div>
+                        <span class="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-400 mb-1">
+                            <i class="fa-solid fa-shield-halved"></i> Acceso Seguro
+                        </span>
+                        <h2 class="text-2xl font-bold text-white tracking-tight">Iniciar Sesión</h2>
+                        <p class="text-sm text-slate-400 mt-1">Ingresa tus credenciales para ingresar a la plataforma.</p>
+                    </div>
                 </div>
 
-                <div class="login-label">
-                    <i class="fa-solid fa-shield-halved"></i>
-                    Acceso seguro
+                <!-- Mensaje de Error (si se envía por GET) -->
+                <?php if ($error == 1): ?>
+                <div class="mb-6 p-4 rounded-2xl bg-rose-500/10 border border-rose-500/20 flex items-start gap-3 text-rose-300 text-sm animate-fade-in">
+                    <i class="fa-solid fa-circle-exclamation text-rose-400 text-base mt-0.5"></i>
+                    <div>
+                        <strong class="font-semibold block text-rose-200">Error de autenticación</strong>
+                        El correo electrónico o la contraseña ingresados son incorrectos.
+                    </div>
                 </div>
+                <?php endif; ?>
 
-                <h2>Iniciar sesión</h2>
-
-                <p class="subtitle">
-                    Ingresa tus datos para acceder al sistema.
-                </p>
-
-                <?php if(isset($_GET['error']) && $_GET['error'] == 'correo'){ ?>
-                    <div class="alert alert-danger">
-                        El correo no está registrado.
-                    </div>
-                <?php } ?>
-
-                <?php if(isset($_GET['error']) && $_GET['error'] == 'password'){ ?>
-                    <div class="alert alert-danger">
-                        La contraseña es incorrecta.
-                    </div>
-                <?php } ?>
-
-                <?php if(isset($_GET['error']) && $_GET['error'] == 'verificar'){ ?>
-                    <div class="alert alert-warning">
-                        Tu cuenta todavía no está verificada.
-                    </div>
-                <?php } ?>
-
-                <?php if(isset($_GET['error']) && $_GET['error'] == '1'){ ?>
-                    <div class="alert alert-danger">
-                        Correo o contraseña incorrectos.
-                    </div>
-                <?php } ?>
-
-                <form method="POST" action="../../controllers/login.php">
-
-                    <div class="form-block">
-                        <label>Correo electrónico</label>
-
-                        <div class="input-line">
-                            <i class="fa-solid fa-envelope"></i>
-
-                            <input
-                            type="email"
-                            name="correo"
-                            placeholder="admin@expitrack.com"
-                            required>
+                <!-- Formulario -->
+                <form action="../../controllers/login.php" method="POST" class="space-y-5">
+                    <!-- Campo: Correo Electrónico -->
+                    <div>
+                        <label for="email" class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">
+                            Correo Electrónico
+                        </label>
+                        <div class="relative rounded-2xl shadow-sm">
+                            <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-500">
+                                <i class="fa-regular fa-envelope"></i>
+                            </div>
+                            <input type="email" id="email" name="email" required value="admin@expitrack.com"
+                                class="w-full pl-11 pr-4 py-3.5 bg-slate-950/70 border border-slate-800 rounded-2xl text-slate-100 placeholder-slate-500 text-sm focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all"
+                                placeholder="tu@correo.com">
                         </div>
                     </div>
 
-                    <div class="form-block">
-                        <label>Contraseña</label>
-
-                        <div class="input-line">
-                            <i class="fa-solid fa-lock"></i>
-
-                            <input
-                            type="password"
-                            name="password"
-                            id="password"
-                            placeholder="********"
-                            required>
-
-                            <button type="button" class="eye-btn" onclick="mostrarPassword()">
-                                <i class="fa-solid fa-eye" id="eyeIcon"></i>
+                    <!-- Campo: Contraseña -->
+                    <div>
+                        <label for="password" class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">
+                            Contraseña
+                        </label>
+                        <div class="relative rounded-2xl shadow-sm">
+                            <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-500">
+                                <i class="fa-solid fa-lock text-xs"></i>
+                            </div>
+                            <input type="password" id="password" name="password" required value="123456"
+                                class="w-full pl-11 pr-11 py-3.5 bg-slate-950/70 border border-slate-800 rounded-2xl text-slate-100 placeholder-slate-500 text-sm focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all"
+                                placeholder="••••••••">
+                            <button type="button" id="togglePassword" class="absolute inset-y-0 right-0 pr-4 flex items-center text-slate-500 hover:text-slate-300 transition-colors">
+                                <i class="fa-regular fa-eye" id="eyeIcon"></i>
                             </button>
                         </div>
                     </div>
 
-                    <div class="login-options">
-
-                        <label class="remember">
-                            <input type="checkbox">
-                            Recordarme
+                    <!-- Opciones extra: Recordarme y Olvidé contraseña -->
+                    <div class="flex items-center justify-between text-xs pt-1">
+                        <label class="flex items-center gap-2 cursor-pointer text-slate-400 hover:text-slate-300 select-none">
+                            <input type="checkbox" class="w-4 h-4 rounded border-slate-800 bg-slate-950 text-emerald-500 focus:ring-emerald-500/20 focus:ring-offset-0">
+                            <span>Recordarme</span>
                         </label>
-
-                        <a href="forgot.php">
+                        <a href="forgot.php" class="font-medium text-emerald-400 hover:text-emerald-300 transition-colors">
                             ¿Olvidaste tu contraseña?
                         </a>
-
                     </div>
 
-                    <button type="submit" class="login-btn">
-                        Ingresar
-                        <i class="fa-solid fa-arrow-right"></i>
+                    <!-- Botón de Envío -->
+                    <button type="submit" class="w-full py-3.5 px-6 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white font-semibold text-sm shadow-lg shadow-emerald-500/25 hover:shadow-emerald-500/40 active:scale-[0.99] transition-all duration-200 flex items-center justify-center gap-2 group">
+                        <span>Ingresar a la Plataforma</span>
+                        <i class="fa-solid fa-arrow-right text-xs group-hover:translate-x-1 transition-transform"></i>
                     </button>
-
                 </form>
-
-                <div class="quick-info">
-                    <small>Usuario de prueba</small>
-                    <strong>admin@expitrack.com</strong>
-                </div>
-
-                <div class="footer">
-                    ExpiTrack © <?= date('Y'); ?>
-                </div>
-
             </div>
 
+            <!-- Caja de Credenciales de Prueba -->
+            <div class="mt-8 pt-6 border-t border-slate-800/80">
+                <div class="p-3.5 rounded-2xl bg-emerald-500/5 border border-emerald-500/10 flex items-center justify-between text-xs">
+                    <div class="flex items-center gap-2.5">
+                        <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+                        <span class="text-slate-400">Usuario Demo:</span>
+                        <code class="text-emerald-300 font-mono">admin@expitrack.com</code>
+                    </div>
+                    <span class="text-slate-500 font-mono">123456</span>
+                </div>
+            </div>
         </div>
 
     </div>
 
-</div>
+    <!-- Script para Toggle Mostrar/Ocultar Contraseña -->
+    <script>
+        const togglePassword = document.getElementById('togglePassword');
+        const passwordInput = document.getElementById('password');
+        const eyeIcon = document.getElementById('eyeIcon');
 
-<script>
-function mostrarPassword(){
-    let password = document.getElementById("password");
-    let eyeIcon = document.getElementById("eyeIcon");
-
-    if(password.type === "password"){
-        password.type = "text";
-        eyeIcon.classList.remove("fa-eye");
-        eyeIcon.classList.add("fa-eye-slash");
-    }else{
-        password.type = "password";
-        eyeIcon.classList.remove("fa-eye-slash");
-        eyeIcon.classList.add("fa-eye");
-    }
-}
-</script>
-
+        togglePassword.addEventListener('click', function () {
+            const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
+            passwordInput.setAttribute('type', type);
+            
+            if (type === 'text') {
+                eyeIcon.classList.remove('fa-eye');
+                eyeIcon.classList.add('fa-eye-slash');
+            } else {
+                eyeIcon.classList.remove('fa-eye-slash');
+                eyeIcon.classList.add('fa-eye');
+            }
+        });
+    </script>
 </body>
 </html>

@@ -1,350 +1,181 @@
 <?php
 session_start();
+require_once __DIR__ . '/../../config/conexion.php';
 
-if(!isset($_SESSION['id_usuario'])){
+if (!isset($_SESSION['usuario_id'])) {
     header("Location: ../auth/login.php");
     exit();
 }
 
-require_once '../../config/conexion.php';
+$id_venta = isset($_GET['id_venta']) ? intval($_GET['id_venta']) : 0;
 
-/** @var mysqli $conn */
-
-if(!isset($_GET['id'])){
+if ($id_venta <= 0) {
     header("Location: index.php");
     exit();
 }
 
-$id_venta = $_GET['id'];
+try {
+    // 1. Obtener la venta con datos de usuario y sucursal
+    $stmtVenta = $pdo->prepare("
+        SELECT 
+            v.*,
+            u.nombre AS cajero,
+            s.nombre AS sucursal,
+            s.direccion AS sucursal_direccion,
+            s.telefono AS sucursal_telefono
+        FROM ventas v
+        INNER JOIN usuarios u ON v.id_usuario = u.id_usuario
+        INNER JOIN sucursales s ON v.id_sucursal = s.id_sucursal
+        WHERE v.id_venta = :id_venta
+        LIMIT 1
+    ");
+    $stmtVenta->execute(['id_venta' => $id_venta]);
+    $venta = $stmtVenta->fetch();
 
-$sqlVenta = "
-SELECT
-    v.*,
-    u.nombre AS usuario,
-    s.nombre AS sucursal
-FROM ventas v
-INNER JOIN usuarios u
-    ON v.id_usuario = u.id_usuario
-INNER JOIN sucursales s
-    ON v.id_sucursal = s.id_sucursal
-WHERE v.id_venta = '$id_venta'
-";
+    if (!$venta) {
+        die("Venta no encontrada.");
+    }
 
-$resVenta = mysqli_query($conn, $sqlVenta);
-$venta = mysqli_fetch_assoc($resVenta);
+    // 2. Obtener los detalles de la venta
+    $stmtDetalle = $pdo->prepare("
+        SELECT 
+            dv.*,
+            p.nombre AS producto_nombre,
+            p.codigo
+        FROM detalle_ventas dv
+        INNER JOIN productos p ON dv.id_producto = p.id_producto
+        WHERE dv.id_venta = :id_venta
+    ");
+    $stmtDetalle->execute(['id_venta' => $id_venta]);
+    $detalles = $stmtDetalle->fetchAll();
 
-if(!$venta){
-    echo "Venta no encontrada";
-    exit();
+} catch (PDOException $e) {
+    die("Error al recuperar el ticket: " . $e->getMessage());
 }
-
-$sqlDetalle = "
-SELECT
-    d.*,
-    p.nombre AS producto
-FROM detalle_ventas d
-INNER JOIN productos p
-    ON d.id_producto = p.id_producto
-WHERE d.id_venta = '$id_venta'
-";
-
-$detalle = mysqli_query($conn, $sqlDetalle);
-
-$logo = "../../assets/img/logo.png";
 ?>
-
 <!DOCTYPE html>
 <html lang="es">
 <head>
-<meta charset="UTF-8">
-<title>Ticket de Venta - ExpiTrack</title>
-
-<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
-
-<style>
-body{
-    background:linear-gradient(135deg,#eef2f7,#dde7f2);
-    font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-}
-
-.ticket{
-    width:420px;
-    margin:35px auto;
-    background:white;
-    border-radius:22px;
-    padding:28px;
-    box-shadow:0 20px 45px rgba(15,23,42,.18);
-}
-
-.logo-ticket{
-    display:block;
-    width:95px;
-    height:95px;
-    object-fit:contain;
-    margin:0 auto 10px;
-}
-
-.ticket h2{
-    text-align:center;
-    font-weight:900;
-    margin:0;
-    color:#0f172a;
-    font-size:2.1rem;
-}
-
-.ticket .subtitle{
-    text-align:center;
-    color:#64748b;
-    margin-bottom:15px;
-    font-size:.95rem;
-}
-
-.line{
-    border-top:1px dashed #94a3b8;
-    margin:18px 0;
-}
-
-.info p{
-    margin:5px 0;
-    font-size:15px;
-}
-
-.info strong{
-    color:#0f172a;
-}
-
-.table-ticket{
-    width:100%;
-    font-size:14px;
-}
-
-.table-ticket th{
-    color:#0f172a;
-    padding-bottom:8px;
-    border-bottom:1px solid #e2e8f0;
-}
-
-.table-ticket td{
-    padding:8px 0;
-    border-bottom:1px solid #f1f5f9;
-}
-
-.total-box{
-    background:#0f172a;
-    color:white;
-    border-radius:18px;
-    padding:18px;
-    margin-top:16px;
-}
-
-.total-line{
-    display:flex;
-    justify-content:space-between;
-    margin-bottom:8px;
-}
-
-.total-final{
-    display:flex;
-    justify-content:space-between;
-    align-items:center;
-    border-top:1px solid rgba(255,255,255,.2);
-    padding-top:12px;
-    margin-top:10px;
-}
-
-.total-final strong{
-    font-size:1.8rem;
-}
-
-.payment-box{
-    background:#f8fafc;
-    border:1px solid #e2e8f0;
-    border-radius:16px;
-    padding:15px;
-    margin-top:15px;
-}
-
-.payment-row{
-    display:flex;
-    justify-content:space-between;
-    margin-bottom:8px;
-    font-size:15px;
-}
-
-.payment-row:last-child{
-    margin-bottom:0;
-}
-
-.thanks{
-    text-align:center;
-    color:#64748b;
-    margin-top:18px;
-    font-size:14px;
-}
-
-.btns{
-    display:flex;
-    gap:10px;
-    justify-content:center;
-    margin-top:22px;
-}
-
-.btn{
-    border-radius:12px;
-    font-weight:700;
-    padding:10px 14px;
-}
-
-@media print{
-    body{
-        background:white;
-    }
-
-    .ticket{
-        box-shadow:none;
-        margin:0 auto;
-        width:100%;
-        border-radius:0;
-    }
-
-    .btns{
-        display:none;
-    }
-}
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ExpiTrack | Ticket #<?php echo str_pad($venta['id_venta'], 6, '0', STR_PAD_LEFT); ?></title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Plus+Jakarta+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        .font-mono-ticket {
+            font-family: 'Space Mono', monospace;
+        }
+        @media print {
+            body {
+                background-color: white !important;
+                color: black !important;
+            }
+            .no-print {
+                display: none !important;
+            }
+            .ticket-card {
+                box-shadow: none !important;
+                border: none !important;
+                width: 100% !important;
+                max-width: 80mm !important;
+                padding: 0 !important;
+            }
+        }
+    </style>
 </head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col items-center justify-center p-4 font-sans">
 
-<body>
-
-<div class="ticket">
-
-    <img src="<?= $logo; ?>" class="logo-ticket" alt="Logo ExpiTrack">
-
-    <h2>ExpiTrack</h2>
-
-    <div class="subtitle">
-        Sistema de Inventario y Punto de Venta
-    </div>
-
-    <div class="line"></div>
-
-    <div class="info">
-        <p><strong>Ticket:</strong> #<?= $venta['id_venta']; ?></p>
-        <p><strong>Fecha:</strong> <?= $venta['fecha_venta']; ?></p>
-        <p><strong>Sucursal:</strong> <?= $venta['sucursal']; ?></p>
-        <p><strong>Cajero:</strong> <?= $venta['usuario']; ?></p>
-        <p><strong>Método:</strong> <?= $venta['metodo_pago']; ?></p>
-    </div>
-
-    <div class="line"></div>
-
-    <table class="table-ticket">
-
-        <thead>
-            <tr>
-                <th>Producto</th>
-                <th class="text-center">Cant.</th>
-                <th class="text-end">Subtotal</th>
-            </tr>
-        </thead>
-
-        <tbody>
-
-        <?php while($fila = mysqli_fetch_assoc($detalle)){ ?>
-
-            <tr>
-                <td><?= $fila['producto']; ?></td>
-                <td class="text-center"><?= $fila['cantidad']; ?></td>
-                <td class="text-end">
-                    $<?= number_format($fila['precio'] * $fila['cantidad'],2); ?>
-                </td>
-            </tr>
-
-        <?php } ?>
-
-        </tbody>
-
-    </table>
-
-    <div class="total-box">
-
-        <div class="total-line">
-            <span>Subtotal</span>
-            <strong>$<?= number_format($venta['total'],2); ?></strong>
-        </div>
-
-        <div class="total-final">
-            <span>Total</span>
-            <strong>$<?= number_format($venta['total'],2); ?></strong>
-        </div>
-
-    </div>
-
-    <div class="payment-box">
-
-        <div class="payment-row">
-            <span>Pago recibido:</span>
-            <strong>$<?= number_format($venta['pago_recibido'],2); ?></strong>
-        </div>
-
-        <div class="payment-row">
-            <span>Cambio:</span>
-            <strong>$<?= number_format($venta['cambio'],2); ?></strong>
-        </div>
-
-        <?php if(isset($venta['monto_efectivo']) && $venta['monto_efectivo'] > 0){ ?>
-        <div class="payment-row">
-            <span>Efectivo:</span>
-            <strong>$<?= number_format($venta['monto_efectivo'],2); ?></strong>
-        </div>
-        <?php } ?>
-
-        <?php if(isset($venta['monto_tarjeta']) && $venta['monto_tarjeta'] > 0){ ?>
-        <div class="payment-row">
-            <span>Tarjeta:</span>
-            <strong>$<?= number_format($venta['monto_tarjeta'],2); ?></strong>
-        </div>
-        <?php } ?>
-
-        <?php if(isset($venta['monto_fiado']) && $venta['monto_fiado'] > 0){ ?>
-        <div class="payment-row">
-            <span>Fiado:</span>
-            <strong>$<?= number_format($venta['monto_fiado'],2); ?></strong>
-        </div>
-        <?php } ?>
-
-        <?php if(!empty($venta['codigo_transaccion'])){ ?>
-        <div class="payment-row">
-            <span>Código transacción:</span>
-            <strong><?= $venta['codigo_transaccion']; ?></strong>
-        </div>
-        <?php } ?>
-
-    </div>
-
-    <div class="line"></div>
-
-    <div class="thanks">
-        <p class="mb-1">Gracias por su compra</p>
-        <p class="mb-0">ExpiTrack © <?= date('Y'); ?></p>
-    </div>
-
-    <div class="btns">
-
-        <button onclick="window.print()" class="btn btn-dark">
-            <i class="bi bi-printer"></i>
-            Imprimir
-        </button>
-
-        <a href="index.php" class="btn btn-primary">
-            <i class="bi bi-cart-plus"></i>
-            Nueva Venta
+    <!-- Botones de Acción (Ocultos al imprimir) -->
+    <div class="no-print flex items-center gap-3 mb-6">
+        <a href="index.php" class="px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-300 hover:text-white text-xs font-semibold transition-all flex items-center gap-2 shadow-lg">
+            <i class="fa-solid fa-arrow-left"></i> Nueva Venta
         </a>
-
+        <button onclick="window.print()" class="px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold transition-all shadow-lg shadow-emerald-500/25 flex items-center gap-2">
+            <i class="fa-solid fa-print"></i> Imprimir Ticket / PDF
+        </button>
     </div>
 
-</div>
+    <!-- Ticket Térmico -->
+    <div class="ticket-card w-full max-w-[380px] bg-white text-slate-900 p-6 rounded-3xl shadow-2xl font-mono-ticket text-xs leading-relaxed">
+        
+        <!-- Encabezado -->
+        <div class="text-center space-y-1 pb-4 border-b border-dashed border-slate-300">
+            <h1 class="text-xl font-bold tracking-tight text-slate-950">ExpiTrack</h1>
+            <p class="text-[11px] font-bold uppercase tracking-wider text-slate-600"><?php echo htmlspecialchars($venta['sucursal']); ?></p>
+            <p class="text-[10px] text-slate-500"><?php echo htmlspecialchars($venta['sucursal_direccion']); ?></p>
+            <p class="text-[10px] text-slate-500">Tel: <?php echo htmlspecialchars($venta['sucursal_telefono']); ?></p>
+        </div>
+
+        <!-- Meta Datos de Venta -->
+        <div class="py-3 border-b border-dashed border-slate-300 space-y-1 text-[11px]">
+            <div class="flex justify-between">
+                <span class="text-slate-500">Ticket #:</span>
+                <span class="font-bold">#<?php echo str_pad($venta['id_venta'], 6, '0', STR_PAD_LEFT); ?></span>
+            </div>
+            <div class="flex justify-between">
+                <span class="text-slate-500">Fecha:</span>
+                <span><?php echo date('d/m/Y H:i', strtotime($venta['fecha'])); ?></span>
+            </div>
+            <div class="flex justify-between">
+                <span class="text-slate-500">Atendió:</span>
+                <span class="truncate max-w-[150px]"><?php echo htmlspecialchars($venta['cajero']); ?></span>
+            </div>
+            <div class="flex justify-between">
+                <span class="text-slate-500">Método Pago:</span>
+                <span class="font-bold"><?php echo htmlspecialchars($venta['metodo_pago']); ?></span>
+            </div>
+        </div>
+
+        <!-- Tabla de Artículos -->
+        <div class="py-3 border-b border-dashed border-slate-300">
+            <div class="flex font-bold border-b border-slate-200 pb-1 mb-2 text-[10px] uppercase text-slate-500">
+                <span class="flex-1">Cant x Producto</span>
+                <span class="w-16 text-right">Total</span>
+            </div>
+
+            <div class="space-y-2">
+                <?php foreach ($detalles as $d): ?>
+                <div>
+                    <div class="font-bold text-slate-900"><?php echo htmlspecialchars($d['producto_nombre']); ?></div>
+                    <div class="flex justify-between text-[11px] text-slate-600">
+                        <span><?php echo $d['cantidad']; ?> x $<?php echo number_format($d['precio'], 2); ?></span>
+                        <span class="font-bold text-slate-900">$<?php echo number_format($d['cantidad'] * $d['precio'], 2); ?></span>
+                    </div>
+                </div>
+                <?php endforeach; ?>
+            </div>
+        </div>
+
+        <!-- Totales y Pago -->
+        <div class="py-3 border-b border-dashed border-slate-300 space-y-1.5 text-[11px]">
+            <div class="flex justify-between text-sm font-bold text-slate-950 pt-1">
+                <span>TOTAL:</span>
+                <span class="text-base">$<?php echo number_format($venta['total'], 2); ?></span>
+            </div>
+            
+            <?php if ($venta['metodo_pago'] === 'EFECTIVO'): ?>
+            <div class="flex justify-between text-slate-600 pt-1">
+                <span>Efectivo Recibido:</span>
+                <span>$<?php echo number_format($venta['pago_recibido'], 2); ?></span>
+            </div>
+            <div class="flex justify-between text-slate-600">
+                <span>Cambio:</span>
+                <span class="font-bold">$<?php echo number_format($venta['cambio'], 2); ?></span>
+            </div>
+            <?php endif; ?>
+        </div>
+
+        <!-- Pie de Página del Ticket -->
+        <div class="pt-4 text-center space-y-1">
+            <p class="font-bold text-slate-900 text-[11px]">¡Gracias por su compra!</p>
+            <p class="text-[10px] text-slate-500">Conserve este ticket para devoluciones o aclaraciones.</p>
+            <div class="pt-2">
+                <i class="fa-solid fa-barcode text-3xl text-slate-800"></i>
+            </div>
+        </div>
+
+    </div>
 
 </body>
 </html>
